@@ -46,7 +46,6 @@ df.dropna(inplace=True)
 # Trend Labels Based on Indicators
 df['Trend_MA'] = np.where(df['MA5'] > df['MA10'], 1, 0)
 df['Trend_RSI'] = np.where(df['RSI'] > 50, 1, 0)
-df = df[df['Bollinger Upper'].notnull() & df['Bollinger Lower'].notnull()]
 
 boll_upper = df['Bollinger Upper'].values.flatten()
 boll_lower = df['Bollinger Lower'].values.flatten()
@@ -108,7 +107,7 @@ indicator_table = pd.DataFrame({
 })
 st.dataframe(indicator_table)
 
-# Show current trend based on MA crossover
+# Show current trend based on ML prediction
 st.write("### 📊 Current ML-Based Market Trend")
 st.write(f"The market is predicted to be in an **{'Uptrend' if df['Overall_Trend'].iloc[-1] else 'Downtrend'}**.")
 
@@ -148,35 +147,37 @@ backtest_metrics = pd.DataFrame({
 
 st.dataframe(backtest_metrics.style.format({"Value": "{:.4f}"}))
 
-# User-Friendly Summary of Backtesting with Accuracy Estimate
+# User-Friendly Summary of Backtesting
 st.subheader("📘 What Do These Metrics Mean?")
-st.markdown("""
-- **MAE (Mean Absolute Error)**: On average, the model's predictions were ₹{:.2f} away from the actual closing prices.
-- **RMSE (Root Mean Squared Error)**: This penalizes larger errors more than MAE. A lower value means better accuracy.
-- **R² Score**: This tells how well the model explains the price movements. A value closer to 1 means a better fit. 
-  - **Accuracy Estimate**: Based on the R² score of {:.4f}, the model is approximately **{:.2f}% accurate** in predicting the closing prices.
-""".format(mae, r2, r2 * 100))
+st.markdown(f"""
+- **MAE (Mean Absolute Error)**: On average, the model's predictions were ₹{mae:.2f} away from the actual closing prices.
+- **RMSE (Root Mean Squared Error)**: Penalizes bigger errors more than MAE. Lower = better.
+- **R² Score**: {r2:.4f}, meaning approximately **{r2*100:.2f}%** of price variation is captured by the model.
+""")
 
-# Additional insights and user-friendly summary
+# Additional Insights
 st.write("## 🧠 Additional Insights & Sentiment Analysis")
 
 # News Sentiment Analysis
 st.subheader("📰 News & Sentiment Analysis")
 
-API_KEY = 'st.secrets["newsapi"]["api_key"]'  # Replace with your actual NewsAPI key
+# Safely get NewsAPI key
+API_KEY = st.secrets.get("newsapi", {}).get("api_key")
 
 def get_stock_news(stock_symbol, api_key):
-    url = f"https://newsapi.org/v2/everything?q={stock_symbol}&apiKey={api_key}"
+    url = f"https://newsapi.org/v2/everything?q={stock_symbol}&language=en&apiKey={api_key}"
     response = requests.get(url)
     if response.status_code == 200:
         news_data = response.json()
-        return [article['title'] for article in news_data['articles']]
+        return [article['title'] for article in news_data.get('articles', [])]
     else:
         return []
 
 def analyze_sentiment(news_headlines):
     sentiment_scores = {'Positive': 0, 'Negative': 0, 'Neutral': 0}
     for headline in news_headlines:
+        if not headline.strip():
+            continue
         blob = TextBlob(headline)
         polarity = blob.sentiment.polarity
         if polarity > 0:
@@ -188,21 +189,28 @@ def analyze_sentiment(news_headlines):
     return sentiment_scores
 
 try:
-    stock_news = get_stock_news(stock_symbol, API_KEY)
-    sentiment = analyze_sentiment(stock_news)
-    total = sum(sentiment.values())
-    st.write(f"### Sentiment Analysis for {stock_symbol}")
-    st.write(f"Positive News: {sentiment['Positive']}")
-    st.write(f"Negative News: {sentiment['Negative']}")
-    st.write(f"Neutral News: {sentiment['Neutral']}")
-    if total > 0:
-        overall = 'Positive' if sentiment['Positive'] / total > 0.5 else 'Negative' if sentiment['Negative'] / total > 0.5 else 'Neutral'
-        st.write(f"**Overall Sentiment**: {overall}")
+    if API_KEY:
+        stock_news = get_stock_news(stock_symbol, API_KEY)
+        if stock_news:
+            sentiment = analyze_sentiment(stock_news)
+            total = sum(sentiment.values())
+            st.write(f"### Sentiment Analysis for {stock_symbol}")
+            st.write(f"Positive News: {sentiment['Positive']}")
+            st.write(f"Negative News: {sentiment['Negative']}")
+            st.write(f"Neutral News: {sentiment['Neutral']}")
+            if total > 0:
+                overall = 'Positive' if sentiment['Positive']/total > 0.5 else 'Negative' if sentiment['Negative']/total > 0.5 else 'Neutral'
+                st.write(f"**Overall Sentiment**: {overall}")
+            else:
+                st.write("No sufficient news to analyze.")
+        else:
+            st.warning("⚠️ No news found for analysis.")
     else:
-        st.write("No news available to analyze.")
+        st.warning("⚠️ NewsAPI Key not found. Sentiment Analysis disabled.")
 except Exception as e:
-    st.error(f"⚠️ Error fetching or analyzing news: {e}")
+    st.error(f"⚠️ Error during news sentiment analysis: {e}")
 
-# Plain Summary for Non-Technical Users
+# Friendly Summary
 st.subheader("📊 Easy-to-Understand Summary")
-st.info("Coming soon: Plain-language insights for non-technical users, including potential risk levels and trend summaries.")
+st.info("Plain-language risk insights and recommendations will be added soon!")
+
