@@ -10,4 +10,4 @@ textblob
 plotly
 setuptools
 packaging
-distutils
+
