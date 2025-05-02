@@ -1,7 +1,40 @@
-- name: 'Deploy to Azure Web App'
-  uses: azure/webapps-deploy@v3
-  id: deploy-to-webapp
-  with:
-    app-name: 'syedstockmarket'
-    slot-name: 'Production'
-    publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_FCA03FBFAE514B228A8498E2E5EA8964 }}
+name: Build Python app
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python version
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Create and start virtual environment
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Zip artifact (optional)
+        run: zip release.zip ./* -r
+
+      - name: Upload artifact (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-app
+          path: |
+            release.zip
+            !venv/
